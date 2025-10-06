@@ -66,16 +66,26 @@ export default function GymApp() {
   }, [session]);
 
   const loadWorkoutData = async () => {
+    console.log('🔍 loadWorkoutData STARTED');
+    console.log('Session user ID:', session?.user?.id);
+
     try {
+      console.log('📡 Querying Supabase...');
       const { data, error } = await supabase
         .from('workout_data')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      console.log('✅ Query completed:', { data, error });
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('❌ Error code:', error.code);
+        throw error;
+      }
 
       if (data) {
+        console.log('💾 Data found, loading...');
         // Show intro only for brand new users with default data
         const isFirstTime = !data.last_workout &&
                              data.consecutive_days === 0 &&
@@ -98,10 +108,14 @@ export default function GymApp() {
         });
         setTempTime(data.hiit_time.toString());
         setTempSpeed(data.vo2max_speed.toString());
+      } else {
+        console.log('⚠️ No data found for user');
       }
+
       setCheckingIntro(false);
+      console.log('✅ checkingIntro set to FALSE');
     } catch (error) {
-      console.error('Error loading workout data:', error);
+      console.error('💥 Error in loadWorkoutData:', error);
       setCheckingIntro(false);
     }
   };
@@ -227,8 +241,7 @@ export default function GymApp() {
     'Burpees', 'Mountain Climbers', 'Press-ups', 'Plank', 'Squats',
     'Bench Dips', 'High knees', 'Burpees', 'Press-ups', 'Plank',
     'V-ups', 'Alternate lunges', 'Incline Press-ups', 'Pull ups',
-    'Leg raises', 'Alternate leg raises', 'Knees to chest',
-    'Barbell squats', 'Deadlifts'
+    'Leg raises', 'Alternate leg raises', 'Knees to chest'
   ];
 
   const weightsProgram = {
