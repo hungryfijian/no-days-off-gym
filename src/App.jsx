@@ -1,30 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Dumbbell, Activity, ChevronLeft, CheckCircle, XCircle, Trophy, RotateCcw } from 'lucide-react';
+import { Clock, Dumbbell, Activity, ChevronLeft, CheckCircle, XCircle, Trophy, RotateCcw, LogOut } from 'lucide-react';
+import { supabase } from './supabaseClient';
+import Auth from './components/Auth';
 
 export default function GymApp() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState('home');
-
-  // Load saved data from localStorage or use defaults
-  const [workoutData, setWorkoutData] = useState(() => {
-    const saved = localStorage.getItem('gymWorkoutData');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    return {
-      hiit: { time: 30 },
-      weights: {
-        day1: {},
-        day2: {},
-        day3: {},
-        day4: {}
-      },
-      vo2max: { speed: 10.0 },
-      lastWorkout: null,
-      consecutiveDays: 0
-    };
+  
+  const [workoutData, setWorkoutData] = useState({
+    hiit: { time: 30 },
+    weights: {
+      day1: {},
+      day2: {},
+      day3: {},
+      day4: {}
+    },
+    vo2max: { speed: 10.0 },
+    lastWorkout: null,
+    consecutiveDays: 0
   });
 
-  // Session state - tracks current session progress
   const [sessionData, setSessionData] = useState({
     hiitComplete: false,
     weightsComplete: false,
@@ -32,84 +28,136 @@ export default function GymApp() {
     currentWeightsDay: 1,
     weightsResults: {}
   });
-
+  
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentWeight, setCurrentWeight] = useState('');
-  const [tempTime, setTempTime] = useState(() => {
-    const saved = localStorage.getItem('gymWorkoutData');
-    if (saved) {
-      return JSON.parse(saved).hiit.time.toString();
-    }
-    return '30';
-  });
-  const [tempSpeed, setTempSpeed] = useState(() => {
-    const saved = localStorage.getItem('gymWorkoutData');
-    if (saved) {
-      return JSON.parse(saved).vo2max.speed.toString();
-    }
-    return '10.0';
-  });
-
-  // HIIT Timer states
+  const [tempTime, setTempTime] = useState('30');
+  const [tempSpeed, setTempSpeed] = useState('10.0');
+  
   const [timerActive, setTimerActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
 
-  // Save to localStorage whenever workoutData changes
+  // Check for existing session on mount
   useEffect(() => {
-    localStorage.setItem('gymWorkoutData', JSON.stringify(workoutData));
-  }, [workoutData]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-  // Rounding functions
-  const roundUpTime = (value) => {
-    // Round up to nearest full second
-    return Math.ceil(value);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load workout data from Supabase when user logs in
+  useEffect(() => {
+    if (session) {
+      loadWorkoutData();
+    }
+  }, [session]);
+
+  const loadWorkoutData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workout_data')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setWorkoutData({
+          hiit: { time: data.hiit_time },
+          weights: {
+            day1: data.weights_day1 || {},
+            day2: data.weights_day2 || {},
+            day3: data.weights_day3 || {},
+            day4: data.weights_day4 || {}
+          },
+          vo2max: { speed: parseFloat(data.vo2max_speed) },
+          lastWorkout: data.last_workout,
+          consecutiveDays: data.consecutive_days
+        });
+        setTempTime(data.hiit_time.toString());
+        setTempSpeed(data.vo2max_speed.toString());
+      }
+    } catch (error) {
+      console.error('Error loading workout data:', error);
+    }
   };
 
-  const roundUpWeight = (value) => {
-    // Round up to nearest 0.5
-    return Math.ceil(value * 2) / 2;
+  const saveWorkoutData = async (data) => {
+    try {
+      const { error } = await supabase
+        .from('workout_data')
+        .upsert({
+          user_id: session.user.id,
+          hiit_time: data.hiit.time,
+          vo2max_speed: data.vo2max.speed,
+          weights_day1: data.weights.day1,
+          weights_day2: data.weights.day2,
+          weights_day3: data.weights.day3,
+          weights_day4: data.weights.day4,
+          last_workout: data.lastWorkout,
+          consecutive_days: data.consecutiveDays,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving workout data:', error);
+    }
   };
 
-  const roundUpSpeed = (value) => {
-    // Round up to nearest 0.1
-    return Math.ceil(value * 10) / 10;
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setWorkoutData({
+      hiit: { time: 30 },
+      weights: { day1: {}, day2: {}, day3: {}, day4: {} },
+      vo2max: { speed: 10.0 },
+      lastWorkout: null,
+      consecutiveDays: 0
+    });
   };
 
-  // HIIT Timer countdown
+  const roundUpTime = (value) => Math.ceil(value);
+  const roundUpWeight = (value) => Math.ceil(value * 2) / 2;
+  const roundUpSpeed = (value) => Math.ceil(value * 10) / 10;
+
   useEffect(() => {
     if (!timerActive || timeRemaining <= 0) return;
 
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          // Timer finished
           clearInterval(interval);
           setTimerActive(false);
-
-          // Move to next exercise
+          
           if (currentExerciseIndex < hiitExercises.length - 1) {
             const nextIndex = currentExerciseIndex + 1;
             setCurrentExerciseIndex(nextIndex);
-
-            // Announce next exercise
+            
             setTimeout(() => {
               speakExercise(hiitExercises[nextIndex]);
-              // Start timer for next exercise
               setTimeout(() => {
                 setTimeRemaining(workoutData.hiit.time);
                 setTimerActive(true);
-              }, 2000); // 2 second delay after announcement
+              }, 2000);
             }, 500);
           }
-
+          
           return 0;
         }
-
-        // Beep countdown for last 5 seconds
+        
         if (prev <= 5) {
           playBeep();
         }
-
+        
         return prev - 1;
       });
     }, 1000);
@@ -121,16 +169,16 @@ export default function GymApp() {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-
+    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-
+    
     oscillator.frequency.value = 800;
     oscillator.type = 'sine';
-
+    
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
+    
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.5);
   };
@@ -235,45 +283,41 @@ export default function GymApp() {
 
   const calculateAdjustment = (lastWorkout, currentValue, type = 'time') => {
     const daysSince = getDaysSinceLastWorkout(lastWorkout);
-
-    if (daysSince === null) return currentValue; // First workout
+    
+    if (daysSince === null) return currentValue;
     if (daysSince === 1) {
-      // Consecutive day: +2%
       const increased = currentValue * 1.02;
       if (type === 'time') return roundUpTime(increased);
       if (type === 'weight') return roundUpWeight(increased);
       if (type === 'speed') return roundUpSpeed(increased);
     }
-    if (daysSince === 2) return currentValue; // Rest day: no change
+    if (daysSince === 2) return currentValue;
     if (daysSince > 2) {
-      // Missed day: -1%
       const decreased = currentValue * 0.99;
       if (type === 'time') return roundUpTime(decreased);
       if (type === 'weight') return roundUpWeight(decreased);
       if (type === 'speed') return roundUpSpeed(decreased);
     }
-
+    
     return currentValue;
   };
 
   const checkSessionComplete = (updatedSessionData) => {
-    return updatedSessionData.hiitComplete &&
-           updatedSessionData.weightsComplete &&
+    return updatedSessionData.hiitComplete && 
+           updatedSessionData.weightsComplete && 
            updatedSessionData.vo2maxComplete;
   };
 
-  const completeSession = (updatedSessionData) => {
+  const completeSession = async (updatedSessionData) => {
     const daysSince = getDaysSinceLastWorkout(workoutData.lastWorkout);
     const newConsecutiveDays = daysSince === 1 ? workoutData.consecutiveDays + 1 : 1;
 
-    // Apply adjustments to HIIT and VO2 Max
     const newHiitTime = calculateAdjustment(workoutData.lastWorkout, workoutData.hiit.time, 'time');
     const newVO2Speed = calculateAdjustment(workoutData.lastWorkout, workoutData.vo2max.speed, 'speed');
 
-    // Apply adjustments to weights that were PASSED
     const dayKey = `day${updatedSessionData.currentWeightsDay}`;
     const updatedDayWeights = { ...workoutData.weights[dayKey] };
-
+    
     Object.keys(updatedSessionData.weightsResults).forEach(exerciseName => {
       if (updatedSessionData.weightsResults[exerciseName].passed) {
         const currentWeight = updatedSessionData.weightsResults[exerciseName].weight;
@@ -281,10 +325,9 @@ export default function GymApp() {
           updatedDayWeights[exerciseName] = calculateAdjustment(workoutData.lastWorkout, currentWeight, 'weight');
         }
       }
-      // Failed exercises already got their -1% immediately, so don't touch them here
     });
 
-    setWorkoutData({
+    const newWorkoutData = {
       ...workoutData,
       hiit: { time: newHiitTime },
       vo2max: { speed: newVO2Speed },
@@ -294,9 +337,11 @@ export default function GymApp() {
       },
       lastWorkout: new Date().toISOString(),
       consecutiveDays: newConsecutiveDays
-    });
+    };
 
-    // Reset session
+    setWorkoutData(newWorkoutData);
+    await saveWorkoutData(newWorkoutData);
+
     setSessionData({
       hiitComplete: false,
       weightsComplete: false,
@@ -305,7 +350,7 @@ export default function GymApp() {
       weightsResults: {}
     });
 
-    alert('<� Full session complete! All improvements applied!');
+    alert('🎉 Full session complete! All improvements applied!');
     setScreen('home');
   };
 
@@ -313,14 +358,13 @@ export default function GymApp() {
     if (passed) {
       const updatedSessionData = { ...sessionData, hiitComplete: true };
       setSessionData(updatedSessionData);
-
+      
       if (checkSessionComplete(updatedSessionData)) {
         completeSession(updatedSessionData);
       } else {
         setScreen('home');
       }
     } else {
-      // Failed - end session without saving
       setSessionData({
         hiitComplete: false,
         weightsComplete: false,
@@ -336,14 +380,13 @@ export default function GymApp() {
     if (passed) {
       const updatedSessionData = { ...sessionData, vo2maxComplete: true };
       setSessionData(updatedSessionData);
-
+      
       if (checkSessionComplete(updatedSessionData)) {
         completeSession(updatedSessionData);
       } else {
         setScreen('home');
       }
     } else {
-      // Failed - end session without saving
       setSessionData({
         hiitComplete: false,
         weightsComplete: false,
@@ -357,16 +400,16 @@ export default function GymApp() {
 
   const getStatusMessage = (lastWorkout) => {
     const daysSince = getDaysSinceLastWorkout(lastWorkout);
-
+    
     if (daysSince === null) return { text: 'Start your journey!', color: 'text-blue-200' };
     if (daysSince === 1) return { text: '+2% boost ready!', color: 'text-green-300' };
     if (daysSince === 2) return { text: 'Rest day - no change', color: 'text-yellow-300' };
     if (daysSince > 2) return { text: '-1% penalty applied', color: 'text-red-300' };
-
+    
     return { text: '', color: '' };
   };
 
-  const resetAllData = () => {
+  const resetAllData = async () => {
     if (confirm('Are you sure you want to reset all workout data? This cannot be undone.')) {
       const defaultData = {
         hiit: { time: 30 },
@@ -390,7 +433,7 @@ export default function GymApp() {
       });
       setTempTime('30');
       setTempSpeed('10.0');
-      localStorage.setItem('gymWorkoutData', JSON.stringify(defaultData));
+      await saveWorkoutData(defaultData);
     }
   };
 
@@ -403,6 +446,18 @@ export default function GymApp() {
     return `${completed}/3`;
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-white text-2xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Auth />;
+  }
+
   const renderHome = () => (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 p-4">
       <div className="max-w-md mx-auto">
@@ -410,7 +465,8 @@ export default function GymApp() {
           <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
           <h1 className="text-4xl font-bold text-white mb-2">No Days Off Gym Club</h1>
           <p className="text-blue-200">Get 2% better every day</p>
-
+          <p className="text-blue-300 text-sm mt-2">{session.user.email}</p>
+          
           {(sessionData.hiitComplete || sessionData.weightsComplete || sessionData.vo2maxComplete) && (
             <div className="mt-4 bg-yellow-500 text-yellow-900 px-4 py-3 rounded-lg font-bold">
               Session Progress: {getSessionProgress()} complete
@@ -421,8 +477,8 @@ export default function GymApp() {
 
         <div className="space-y-4">
           <button
-            onClick={() => {
-              setScreen('hiit');
+            onClick={() => { 
+              setScreen('hiit'); 
               setCurrentExerciseIndex(0);
               setTimerActive(false);
               setTimeRemaining(0);
@@ -430,7 +486,7 @@ export default function GymApp() {
             className={`w-full ${sessionData.hiitComplete ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-orange-500 to-red-500'} text-white p-6 rounded-2xl shadow-lg transform transition hover:scale-105 active:scale-95`}
           >
             <Activity className="w-8 h-8 mx-auto mb-2" />
-            <h2 className="text-2xl font-bold mb-1">HIIT Training {sessionData.hiitComplete && ''}</h2>
+            <h2 className="text-2xl font-bold mb-1">HIIT Training {sessionData.hiitComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Current: {workoutData.hiit.time} seconds per exercise</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
             <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
@@ -443,7 +499,7 @@ export default function GymApp() {
             className={`w-full ${sessionData.weightsComplete ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-purple-500 to-pink-500'} text-white p-6 rounded-2xl shadow-lg transform transition hover:scale-105 active:scale-95`}
           >
             <Dumbbell className="w-8 h-8 mx-auto mb-2" />
-            <h2 className="text-2xl font-bold mb-1">Weights {sessionData.weightsComplete && ''}</h2>
+            <h2 className="text-2xl font-bold mb-1">Weights {sessionData.weightsComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Progressive overload tracking</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
             <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
@@ -456,7 +512,7 @@ export default function GymApp() {
             className={`w-full ${sessionData.vo2maxComplete ? 'bg-gradient-to-r from-green-600 to-green-700' : 'bg-gradient-to-r from-green-500 to-teal-500'} text-white p-6 rounded-2xl shadow-lg transform transition hover:scale-105 active:scale-95`}
           >
             <Clock className="w-8 h-8 mx-auto mb-2" />
-            <h2 className="text-2xl font-bold mb-1">VO2 Max Training {sessionData.vo2maxComplete && ''}</h2>
+            <h2 className="text-2xl font-bold mb-1">VO2 Max Training {sessionData.vo2maxComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Current: {workoutData.vo2max.speed}</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
             <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
@@ -465,13 +521,23 @@ export default function GymApp() {
           </button>
         </div>
 
-        <button
-          onClick={resetAllData}
-          className="w-full mt-8 bg-gray-700 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition"
-        >
-          <RotateCcw className="w-5 h-5" />
-          Reset All Data
-        </button>
+        <div className="flex gap-2 mt-8">
+          <button
+            onClick={resetAllData}
+            className="flex-1 bg-gray-700 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Reset Data
+          </button>
+          
+          <button
+            onClick={handleSignOut}
+            className="flex-1 bg-red-600 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition"
+          >
+            <LogOut className="w-5 h-5" />
+            Sign Out
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -494,7 +560,7 @@ export default function GymApp() {
         <div className="bg-white rounded-2xl p-6 shadow-2xl mb-4">
           <h2 className="text-2xl font-bold mb-2">HIIT Workout</h2>
           <p className="text-gray-600 mb-4">{workoutData.hiit.time} seconds each - No breaks</p>
-
+          
           <div className="mb-6">
             <label className="block text-sm font-semibold mb-2">Set time per exercise (seconds):</label>
             <input
@@ -505,11 +571,13 @@ export default function GymApp() {
               disabled={timerActive}
             />
             <button
-              onClick={() => {
-                setWorkoutData({
+              onClick={async () => {
+                const newData = {
                   ...workoutData,
                   hiit: { time: parseInt(tempTime) || 30 }
-                });
+                };
+                setWorkoutData(newData);
+                await saveWorkoutData(newData);
                 resetHiitTimer();
               }}
               disabled={timerActive}
@@ -526,8 +594,7 @@ export default function GymApp() {
             <h3 className="text-3xl font-bold text-orange-700 text-center mb-4">
               {hiitExercises[currentExerciseIndex]}
             </h3>
-
-            {/* Timer Display */}
+            
             <div className={`text-center ${timeRemaining <= 5 && timeRemaining > 0 ? 'animate-pulse' : ''}`}>
               <div className={`text-7xl font-bold ${timeRemaining <= 5 && timeRemaining > 0 ? 'text-red-600' : 'text-orange-600'}`}>
                 {timerActive || timeRemaining > 0 ? timeRemaining : workoutData.hiit.time}
@@ -656,7 +723,7 @@ export default function GymApp() {
 
         <div className="bg-white rounded-2xl p-6 shadow-2xl">
           <h2 className="text-2xl font-bold mb-6">Select Workout Day</h2>
-
+          
           <div className="space-y-3">
             {[1, 2, 3, 4].map((day) => (
               <button
@@ -731,8 +798,7 @@ export default function GymApp() {
               <button
                 onClick={() => {
                   const weight = parseFloat(currentWeight) || savedWeight;
-
-                  // Record this as a PASS
+                  
                   const updatedWeightsResults = {
                     ...sessionData.weightsResults,
                     [currentExercise.name]: { passed: true, weight: weight }
@@ -743,14 +809,13 @@ export default function GymApp() {
                     setCurrentExerciseIndex(currentExerciseIndex + 1);
                     setCurrentWeight('');
                   } else {
-                    // All exercises complete
                     const updatedSessionData = {
                       ...sessionData,
                       weightsResults: updatedWeightsResults,
                       weightsComplete: true
                     };
                     setSessionData(updatedSessionData);
-
+                    
                     if (checkSessionComplete(updatedSessionData)) {
                       completeSession(updatedSessionData);
                     } else {
@@ -764,16 +829,13 @@ export default function GymApp() {
                 <CheckCircle className="w-6 h-6" />
                 {currentExerciseIndex < program.exercises.length - 1 ? 'Pass - Next Exercise' : 'Pass - Complete Weights'}
               </button>
-
+              
               <button
-                onClick={() => {
+                onClick={async () => {
                   const weight = parseFloat(currentWeight) || savedWeight;
-
-                  // Apply immediate -1% penalty
                   const penalizedWeight = weight > 0 ? roundUpWeight(weight * 0.99) : 0;
-
-                  // Update workout data immediately
-                  setWorkoutData({
+                  
+                  const newWorkoutData = {
                     ...workoutData,
                     weights: {
                       ...workoutData.weights,
@@ -782,9 +844,11 @@ export default function GymApp() {
                         [currentExercise.name]: penalizedWeight
                       }
                     }
-                  });
+                  };
+                  
+                  setWorkoutData(newWorkoutData);
+                  await saveWorkoutData(newWorkoutData);
 
-                  // Record this as a FAIL
                   const updatedWeightsResults = {
                     ...sessionData.weightsResults,
                     [currentExercise.name]: { passed: false, weight: penalizedWeight }
@@ -795,14 +859,13 @@ export default function GymApp() {
                     setCurrentExerciseIndex(currentExerciseIndex + 1);
                     setCurrentWeight('');
                   } else {
-                    // All exercises complete
                     const updatedSessionData = {
                       ...sessionData,
                       weightsResults: updatedWeightsResults,
                       weightsComplete: true
                     };
                     setSessionData(updatedSessionData);
-
+                    
                     if (checkSessionComplete(updatedSessionData)) {
                       completeSession(updatedSessionData);
                     } else {
@@ -882,10 +945,14 @@ export default function GymApp() {
               className="w-full p-3 border-2 border-gray-300 rounded-lg"
             />
             <button
-              onClick={() => setWorkoutData({
-                ...workoutData,
-                vo2max: { speed: parseFloat(tempSpeed) || 10.0 }
-              })}
+              onClick={async () => {
+                const newData = {
+                  ...workoutData,
+                  vo2max: { speed: parseFloat(tempSpeed) || 10.0 }
+                };
+                setWorkoutData(newData);
+                await saveWorkoutData(newData);
+              }}
               className="mt-2 w-full bg-blue-500 text-white p-2 rounded-lg"
             >
               Update Speed
@@ -900,13 +967,13 @@ export default function GymApp() {
           <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
             <h4 className="font-bold text-yellow-800 mb-2">Workout Protocol:</h4>
             <ul className="space-y-2 text-sm text-yellow-900">
-              <li>" Interval 1: 1 min at {workoutData.vo2max.speed}</li>
-              <li>" Rest: 1 minute</li>
-              <li>" Interval 2: 1 min at {workoutData.vo2max.speed}</li>
-              <li>" Rest: 1 minute</li>
-              <li>" Interval 3: 1 min at {workoutData.vo2max.speed}</li>
-              <li>" Rest: 1 minute</li>
-              <li>" Interval 4: 1 min at {workoutData.vo2max.speed}</li>
+              <li>• Interval 1: 1 min at {workoutData.vo2max.speed}</li>
+              <li>• Rest: 1 minute</li>
+              <li>• Interval 2: 1 min at {workoutData.vo2max.speed}</li>
+              <li>• Rest: 1 minute</li>
+              <li>• Interval 3: 1 min at {workoutData.vo2max.speed}</li>
+              <li>• Rest: 1 minute</li>
+              <li>• Interval 4: 1 min at {workoutData.vo2max.speed}</li>
             </ul>
           </div>
 
