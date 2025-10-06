@@ -93,7 +93,7 @@ export default function Intro({ onComplete }) {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-purple-600 font-bold">•</span>
-                <span><strong>FAIL</strong> a weight exercise to get immediate -1% on that exercise</span>
+                <span><strong>FAIL</strong> a weight exercise to keep it the same weight next time</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-purple-600 font-bold">•</span>
