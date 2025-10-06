@@ -20,13 +20,16 @@ export default function GymApp() {
     },
     vo2max: { speed: 10.0 },
     lastWorkout: null,
-    consecutiveDays: 0
+    consecutiveDays: 0,
+    recommendedRestUntil: null
   });
 
   const [sessionData, setSessionData] = useState({
     hiitComplete: false,
+    hiitPassed: false,
     weightsComplete: false,
     vo2maxComplete: false,
+    vo2maxPassed: false,
     currentWeightsDay: 1,
     weightsResults: {}
   });
@@ -41,6 +44,7 @@ export default function GymApp() {
 
   const [showIntro, setShowIntro] = useState(false);
   const [checkingIntro, setCheckingIntro] = useState(true);
+  const [restRecommendationDismissed, setRestRecommendationDismissed] = useState(false);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -112,7 +116,8 @@ export default function GymApp() {
           },
           vo2max: { speed: parseFloat(data.vo2max_speed) },
           lastWorkout: data.last_workout,
-          consecutiveDays: data.consecutive_days
+          consecutiveDays: data.consecutive_days,
+          recommendedRestUntil: data.recommended_rest_until || null
         });
         setTempTime(data.hiit_time.toString());
         setTempSpeed(data.vo2max_speed.toString());
@@ -142,6 +147,7 @@ export default function GymApp() {
           weights_day4: data.weights.day4,
           last_workout: data.lastWorkout,
           consecutive_days: data.consecutiveDays,
+          recommended_rest_until: data.recommendedRestUntil,
           updated_at: new Date().toISOString()
         });
 
@@ -158,8 +164,10 @@ export default function GymApp() {
       weights: { day1: {}, day2: {}, day3: {}, day4: {} },
       vo2max: { speed: 10.0 },
       lastWorkout: null,
-      consecutiveDays: 0
+      consecutiveDays: 0,
+      recommendedRestUntil: null
     });
+    setRestRecommendationDismissed(false);
   };
 
   const roundUpTime = (value) => Math.ceil(value);
@@ -317,24 +325,38 @@ export default function GymApp() {
     return diffDays;
   };
 
-  const calculateAdjustment = (lastWorkout, currentValue, type = 'time') => {
+  const calculateAdjustment = (lastWorkout, currentValue, consecutiveDays, type = 'time') => {
     const daysSince = getDaysSinceLastWorkout(lastWorkout);
-    
-    if (daysSince === null) return currentValue;
+
+    if (daysSince === null) return currentValue; // First workout
+
     if (daysSince === 1) {
-      const increased = currentValue * 1.02;
-      if (type === 'time') return roundUpTime(increased);
-      if (type === 'weight') return roundUpWeight(increased);
-      if (type === 'speed') return roundUpSpeed(increased);
+      // Consecutive day - only apply gains if consecutiveDays >= 1
+      if (consecutiveDays >= 1) {
+        // Can get gains (second or later consecutive day)
+        const increased = currentValue * 1.01;
+        if (type === 'time') return roundUpTime(increased);
+        if (type === 'weight') return roundUpWeight(increased);
+        if (type === 'speed') return roundUpSpeed(increased);
+      } else {
+        // First day back after rest, no gains
+        return currentValue;
+      }
     }
-    if (daysSince === 2) return currentValue;
-    if (daysSince > 2) {
-      const decreased = currentValue * 0.99;
+
+    if (daysSince === 2) {
+      // First rest day, no penalty, no gains
+      return currentValue;
+    }
+
+    if (daysSince >= 3) {
+      // Extended break, compounded penalty
+      const decreased = currentValue * Math.pow(0.99, daysSince - 2);
       if (type === 'time') return roundUpTime(decreased);
       if (type === 'weight') return roundUpWeight(decreased);
       if (type === 'speed') return roundUpSpeed(decreased);
     }
-    
+
     return currentValue;
   };
 
@@ -346,22 +368,44 @@ export default function GymApp() {
 
   const completeSession = async (updatedSessionData) => {
     const daysSince = getDaysSinceLastWorkout(workoutData.lastWorkout);
-    const newConsecutiveDays = daysSince === 1 ? workoutData.consecutiveDays + 1 : 1;
+    const newConsecutiveDays = daysSince === 1 ? workoutData.consecutiveDays + 1 : 0;
 
-    const newHiitTime = calculateAdjustment(workoutData.lastWorkout, workoutData.hiit.time, 'time');
-    const newVO2Speed = calculateAdjustment(workoutData.lastWorkout, workoutData.vo2max.speed, 'speed');
+    // Only apply adjustments to passed sections
+    const newHiitTime = updatedSessionData.hiitPassed
+      ? calculateAdjustment(workoutData.lastWorkout, workoutData.hiit.time, workoutData.consecutiveDays, 'time')
+      : workoutData.hiit.time;
+
+    const newVO2Speed = updatedSessionData.vo2maxPassed
+      ? calculateAdjustment(workoutData.lastWorkout, workoutData.vo2max.speed, workoutData.consecutiveDays, 'speed')
+      : workoutData.vo2max.speed;
 
     const dayKey = `day${updatedSessionData.currentWeightsDay}`;
     const updatedDayWeights = { ...workoutData.weights[dayKey] };
-    
+
     Object.keys(updatedSessionData.weightsResults).forEach(exerciseName => {
       if (updatedSessionData.weightsResults[exerciseName].passed) {
         const currentWeight = updatedSessionData.weightsResults[exerciseName].weight;
         if (currentWeight > 0) {
-          updatedDayWeights[exerciseName] = calculateAdjustment(workoutData.lastWorkout, currentWeight, 'weight');
+          updatedDayWeights[exerciseName] = calculateAdjustment(workoutData.lastWorkout, currentWeight, workoutData.consecutiveDays, 'weight');
         }
       }
     });
+
+    // Handle rest recommendation (after 5 consecutive days)
+    let recommendedRestUntil = workoutData.recommendedRestUntil;
+    if (newConsecutiveDays >= 5 && !workoutData.recommendedRestUntil) {
+      // Set recommended rest window for next 2 days
+      const restDate = new Date();
+      restDate.setDate(restDate.getDate() + 2);
+      recommendedRestUntil = restDate.toISOString();
+      setRestRecommendationDismissed(false);
+    }
+
+    // Clear recommendation if they took 2 rest days
+    if (daysSince >= 2) {
+      recommendedRestUntil = null;
+      setRestRecommendationDismissed(false);
+    }
 
     const newWorkoutData = {
       ...workoutData,
@@ -372,7 +416,8 @@ export default function GymApp() {
         [dayKey]: updatedDayWeights
       },
       lastWorkout: new Date().toISOString(),
-      consecutiveDays: newConsecutiveDays
+      consecutiveDays: newConsecutiveDays,
+      recommendedRestUntil
     };
 
     setWorkoutData(newWorkoutData);
@@ -380,8 +425,10 @@ export default function GymApp() {
 
     setSessionData({
       hiitComplete: false,
+      hiitPassed: false,
       weightsComplete: false,
       vo2maxComplete: false,
+      vo2maxPassed: false,
       currentWeightsDay: 1,
       weightsResults: {}
     });
@@ -391,57 +438,67 @@ export default function GymApp() {
   };
 
   const handleHiitComplete = (passed) => {
-    if (passed) {
-      const updatedSessionData = { ...sessionData, hiitComplete: true };
-      setSessionData(updatedSessionData);
-      
-      if (checkSessionComplete(updatedSessionData)) {
-        completeSession(updatedSessionData);
-      } else {
-        setScreen('home');
-      }
+    const updatedSessionData = {
+      ...sessionData,
+      hiitComplete: true,
+      hiitPassed: passed
+    };
+    setSessionData(updatedSessionData);
+
+    if (checkSessionComplete(updatedSessionData)) {
+      completeSession(updatedSessionData);
     } else {
-      setSessionData({
-        hiitComplete: false,
-        weightsComplete: false,
-        vo2maxComplete: false,
-        currentWeightsDay: 1,
-        weightsResults: {}
-      });
       setScreen('home');
     }
   };
 
   const handleVO2Complete = (passed) => {
-    if (passed) {
-      const updatedSessionData = { ...sessionData, vo2maxComplete: true };
-      setSessionData(updatedSessionData);
-      
-      if (checkSessionComplete(updatedSessionData)) {
-        completeSession(updatedSessionData);
-      } else {
-        setScreen('home');
-      }
+    const updatedSessionData = {
+      ...sessionData,
+      vo2maxComplete: true,
+      vo2maxPassed: passed
+    };
+    setSessionData(updatedSessionData);
+
+    if (checkSessionComplete(updatedSessionData)) {
+      completeSession(updatedSessionData);
     } else {
-      setSessionData({
-        hiitComplete: false,
-        weightsComplete: false,
-        vo2maxComplete: false,
-        currentWeightsDay: 1,
-        weightsResults: {}
-      });
       setScreen('home');
     }
   };
 
-  const getStatusMessage = (lastWorkout) => {
+  const getStatusMessage = (lastWorkout, consecutiveDays, recommendedRestUntil) => {
     const daysSince = getDaysSinceLastWorkout(lastWorkout);
-    
+
+    // Check if in recommended rest window
+    if (recommendedRestUntil) {
+      const restDate = new Date(recommendedRestUntil);
+      const now = new Date();
+      if (now < restDate) {
+        const daysInWindow = Math.floor((restDate - now) / (1000 * 60 * 60 * 24)) + 1;
+        return {
+          text: `Recommended rest day ${3 - daysInWindow} of 2`,
+          color: 'text-blue-300'
+        };
+      }
+    }
+
     if (daysSince === null) return { text: 'Start your journey!', color: 'text-blue-200' };
-    if (daysSince === 1) return { text: '+2% boost ready!', color: 'text-green-300' };
+
+    if (daysSince === 1) {
+      if (consecutiveDays >= 1) {
+        return { text: '+1% boost ready!', color: 'text-green-300' };
+      } else {
+        return { text: 'First day back - no gains', color: 'text-yellow-300' };
+      }
+    }
+
     if (daysSince === 2) return { text: 'Rest day - no change', color: 'text-yellow-300' };
-    if (daysSince > 2) return { text: '-1% penalty applied', color: 'text-red-300' };
-    
+    if (daysSince > 2) {
+      const penalty = Math.round((1 - Math.pow(0.99, daysSince - 2)) * 100);
+      return { text: `-${penalty}% penalty applied`, color: 'text-red-300' };
+    }
+
     return { text: '', color: '' };
   };
 
@@ -457,16 +514,20 @@ export default function GymApp() {
         },
         vo2max: { speed: 10.0 },
         lastWorkout: null,
-        consecutiveDays: 0
+        consecutiveDays: 0,
+        recommendedRestUntil: null
       };
       setWorkoutData(defaultData);
       setSessionData({
         hiitComplete: false,
+        hiitPassed: false,
         weightsComplete: false,
         vo2maxComplete: false,
+        vo2maxPassed: false,
         currentWeightsDay: 1,
         weightsResults: {}
       });
+      setRestRecommendationDismissed(false);
       setTempTime('30');
       setTempSpeed('10.0');
       await saveWorkoutData(defaultData);
@@ -511,8 +572,34 @@ export default function GymApp() {
         {/* Add Workout Status Dashboard */}
         <WorkoutStatus workoutData={workoutData} />
 
+        {/* Rest Recommendation Banner */}
+        {workoutData.consecutiveDays >= 5 && workoutData.recommendedRestUntil && !restRecommendationDismissed && (
+          <div className="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-4 rounded-2xl shadow-lg">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+                  <Trophy className="w-6 h-6" />
+                  Great Work! Time to Rest
+                </h3>
+                <p className="text-sm mb-2">
+                  You've trained for 5 consecutive days! Consider taking 2 rest days to recover.
+                </p>
+                <p className="text-xs opacity-90">
+                  No penalties will apply during your recommended rest window. Gains still possible if you train.
+                </p>
+              </div>
+              <button
+                onClick={() => setRestRecommendationDismissed(true)}
+                className="ml-4 text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {(sessionData.hiitComplete || sessionData.weightsComplete || sessionData.vo2maxComplete) && (
-          <div className="mt-4 bg-yellow-500 text-yellow-900 px-4 py-3 rounded-lg font-bold">
+          <div className="mb-4 bg-yellow-500 text-yellow-900 px-4 py-3 rounded-lg font-bold">
             Session Progress: {getSessionProgress()} complete
             <p className="text-sm font-normal mt-1">Complete all 3 to apply improvements!</p>
           </div>
@@ -532,8 +619,8 @@ export default function GymApp() {
             <h2 className="text-2xl font-bold mb-1">HIIT Training {sessionData.hiitComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Current: {workoutData.hiit.time} seconds per exercise</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
-            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
-              {getStatusMessage(workoutData.lastWorkout).text}
+            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).color}`}>
+              {getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).text}
             </p>
           </button>
 
@@ -545,8 +632,8 @@ export default function GymApp() {
             <h2 className="text-2xl font-bold mb-1">Weights {sessionData.weightsComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Progressive overload tracking</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
-            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
-              {getStatusMessage(workoutData.lastWorkout).text}
+            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).color}`}>
+              {getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).text}
             </p>
           </button>
 
@@ -558,8 +645,8 @@ export default function GymApp() {
             <h2 className="text-2xl font-bold mb-1">VO2 Max Training {sessionData.vo2maxComplete && '✓'}</h2>
             <p className="text-sm opacity-90">Current: {workoutData.vo2max.speed}</p>
             <p className="text-xs opacity-75 mt-1">Streak: {workoutData.consecutiveDays} days</p>
-            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout).color}`}>
-              {getStatusMessage(workoutData.lastWorkout).text}
+            <p className={`text-xs font-semibold mt-1 ${getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).color}`}>
+              {getStatusMessage(workoutData.lastWorkout, workoutData.consecutiveDays, workoutData.recommendedRestUntil).text}
             </p>
           </button>
         </div>
