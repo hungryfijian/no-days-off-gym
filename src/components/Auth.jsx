@@ -37,78 +37,82 @@ export default function Auth() {
   };
 
   return (
-    <div className=\"min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center p-4\">
-      <div className=\"bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full\">
-        <div className=\"text-center mb-8\">
-          <div className=\"bg-gradient-to-r from-blue-600 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4\">
-            <User className=\"w-8 h-8 text-white\" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full">
+        <div className="text-center mb-8">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-8 h-8 text-white" />
           </div>
-          <h1 className=\"text-3xl font-bold text-gray-800 mb-2\">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
             No Days Off Gym Club
           </h1>
-          <p className=\"text-gray-600\">
+          <p className="text-gray-600">
             {isSignUp ? 'Create your account' : 'Welcome back!'}
           </p>
         </div>
 
-        <form onSubmit={handleAuth} className=\"space-y-4\">
+        <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className=\"block text-sm font-semibold text-gray-700 mb-2\">
-              <Mail className=\"w-4 h-4 inline mr-2\" />
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <Mail className="w-4 h-4 inline mr-2" />
               Email
             </label>
             <input
-              type=\"email\"
-              placeholder=\"your@email.com\"
+              type="email"
+              placeholder="your@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className=\"w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none\"
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className=\"block text-sm font-semibold text-gray-700 mb-2\">
-              <Lock className=\"w-4 h-4 inline mr-2\" />
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <Lock className="w-4 h-4 inline mr-2" />
               Password
             </label>
             <input
-              type=\"password\"
-              placeholder=\"••••••••\"
+              type="password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className=\"w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none\"
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
             />
           </div>
 
           {message && (
-            <div className={\p-3 rounded-lg text-sm \\}>
+            <div className={`p-3 rounded-lg text-sm ${
+              message.includes('Check') 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-red-100 text-red-800'
+            }`}>
               {message}
             </div>
           )}
 
           <button
-            type=\"submit\"
+            type="submit"
             disabled={loading}
-            className=\"w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed\"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
         </form>
 
-        <div className=\"mt-6 text-center\">
+        <div className="mt-6 text-center">
           <button
             onClick={() => {
               setIsSignUp(!isSignUp);
               setMessage('');
             }}
-            className=\"text-blue-600 hover:underline\"
+            className="text-blue-600 hover:underline"
           >
             {isSignUp
               ? 'Already have an account? Sign in'
-              : \"Don't have an account? Sign up\"}
+              : "Don't have an account? Sign up"}
           </button>
         </div>
       </div>
