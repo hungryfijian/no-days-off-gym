@@ -47,12 +47,20 @@ export default function GymApp() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+      // If no session, we're not checking intro - go straight to auth
+      if (!session) {
+        setCheckingIntro(false);
+      }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Reset checking state when session changes
+      if (!session) {
+        setCheckingIntro(false);
+      }
     });
 
     return () => subscription.unsubscribe();
