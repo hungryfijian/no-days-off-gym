@@ -1,13 +1,13 @@
-# No Days Off Gym Club =�
+# 1% Gym Club 💪
 
-Get 2% better every day with progressive overload training.
+Get 1% better every day with progressive overload training.
 
 ## Features
 
 - **HIIT Training**: Automated timer with voice announcements and countdown beeps
 - **Weights Tracking**: Progressive overload with 4-day split program
 - **VO2 Max Training**: Interval training tracker
-- **Smart Progression**: +2% on consecutive days, -1% on missed workouts
+- **Smart Progression**: +1% on consecutive days, -1% on missed workouts
 - **Session-Based**: Complete all 3 workouts in one session for improvements
 
 ## Getting Started
@@ -29,7 +29,7 @@ npm run build
 
 ## Progression Rules
 
-- **Consecutive Days** (Yesterday): +2% boost
+- **Consecutive Days** (Yesterday): +1% boost
 - **Rest Day** (2 days ago): No change
 - **Missed Days** (3+ days): -1% penalty
 

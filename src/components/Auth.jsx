@@ -44,7 +44,7 @@ export default function Auth() {
             <User className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            No Days Off Gym Club
+            1% Gym Club
           </h1>
           <p className="text-gray-600">
             {isSignUp ? 'Create your account' : 'Welcome back!'}

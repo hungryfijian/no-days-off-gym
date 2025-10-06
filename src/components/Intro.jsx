@@ -7,8 +7,8 @@ export default function Intro({ onComplete }) {
       <div className="max-w-2xl mx-auto py-8">
         <div className="text-center mb-8">
           <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4" />
-          <h1 className="text-5xl font-bold text-white mb-3">No Days Off Gym Club</h1>
-          <p className="text-2xl text-blue-200 font-semibold">Get 2% Better Every Day</p>
+          <h1 className="text-5xl font-bold text-white mb-3">1% Gym Club</h1>
+          <p className="text-2xl text-blue-200 font-semibold">Get 1% Better Every Day</p>
         </div>
 
         <div className="bg-white rounded-2xl p-8 shadow-2xl mb-6">
@@ -55,7 +55,7 @@ export default function Intro({ onComplete }) {
               <div className="flex items-start gap-3">
                 <span className="text-2xl">🔥</span>
                 <div>
-                  <p className="font-bold text-green-700">Consecutive Days: +2%</p>
+                  <p className="font-bold text-green-700">Consecutive Days: +1%</p>
                   <p className="text-gray-700 text-sm">Work out daily to boost all your numbers</p>
                 </div>
               </div>
@@ -89,7 +89,7 @@ export default function Intro({ onComplete }) {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-purple-600 font-bold">•</span>
-                <span><strong>PASS</strong> a weight exercise to be eligible for +2% next time</span>
+                <span><strong>PASS</strong> a weight exercise to be eligible for +1% next time</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-purple-600 font-bold">•</span>
@@ -119,7 +119,7 @@ export default function Intro({ onComplete }) {
             <ol className="space-y-2 ml-8 text-gray-800">
               <li><strong>1.</strong> Start with comfortable baseline numbers</li>
               <li><strong>2.</strong> Complete all 3 workouts in your first session</li>
-              <li><strong>3.</strong> Return daily to get your 2% boost</li>
+              <li><strong>3.</strong> Return daily to get your 1% boost</li>
               <li><strong>4.</strong> Track your streak and watch yourself improve!</li>
             </ol>
           </div>

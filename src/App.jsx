@@ -564,8 +564,8 @@ export default function GymApp() {
       <div className="max-w-md mx-auto">
         <div className="text-center mb-8 pt-8">
           <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-          <h1 className="text-4xl font-bold text-white mb-2">No Days Off Gym Club</h1>
-          <p className="text-blue-200">Get 2% better every day</p>
+          <h1 className="text-4xl font-bold text-white mb-2">1% Gym Club</h1>
+          <p className="text-blue-200">Get 1% better every day</p>
           <p className="text-blue-300 text-sm mt-2">{session.user.email}</p>
         </div>
 
