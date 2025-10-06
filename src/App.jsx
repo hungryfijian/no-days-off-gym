@@ -227,7 +227,8 @@ export default function GymApp() {
     'Burpees', 'Mountain Climbers', 'Press-ups', 'Plank', 'Squats',
     'Bench Dips', 'High knees', 'Burpees', 'Press-ups', 'Plank',
     'V-ups', 'Alternate lunges', 'Incline Press-ups', 'Pull ups',
-    'Leg raises', 'Alternate leg raises', 'Knees to chest'
+    'Leg raises', 'Alternate leg raises', 'Knees to chest',
+    'Barbell squats', 'Deadlifts'
   ];
 
   const weightsProgram = {
