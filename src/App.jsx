@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Clock, Dumbbell, Activity, ChevronLeft, CheckCircle, XCircle, Trophy, RotateCcw, LogOut } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import Auth from './components/Auth';
+import Intro from './components/Intro';
+import WorkoutStatus from './components/WorkoutStatus';
 
 export default function GymApp() {
   const [session, setSession] = useState(null);
@@ -37,6 +39,9 @@ export default function GymApp() {
   const [timerActive, setTimerActive] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
 
+  const [showIntro, setShowIntro] = useState(false);
+  const [checkingIntro, setCheckingIntro] = useState(true);
+
   // Check for existing session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -71,6 +76,14 @@ export default function GymApp() {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        // Show intro only for brand new users with default data
+        const isFirstTime = !data.last_workout &&
+                             data.consecutive_days === 0 &&
+                             data.hiit_time === 30 &&
+                             parseFloat(data.vo2max_speed) === 10.0 &&
+                             Object.keys(data.weights_day1 || {}).length === 0;
+        setShowIntro(isFirstTime);
+
         setWorkoutData({
           hiit: { time: data.hiit_time },
           weights: {
@@ -86,8 +99,10 @@ export default function GymApp() {
         setTempTime(data.hiit_time.toString());
         setTempSpeed(data.vo2max_speed.toString());
       }
+      setCheckingIntro(false);
     } catch (error) {
       console.error('Error loading workout data:', error);
+      setCheckingIntro(false);
     }
   };
 
@@ -446,7 +461,7 @@ export default function GymApp() {
     return `${completed}/3`;
   };
 
-  if (loading) {
+  if (loading || checkingIntro) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
         <div className="text-white text-2xl">Loading...</div>
@@ -458,6 +473,10 @@ export default function GymApp() {
     return <Auth />;
   }
 
+  if (showIntro) {
+    return <Intro onComplete={() => setShowIntro(false)} />;
+  }
+
   const renderHome = () => (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 p-4">
       <div className="max-w-md mx-auto">
@@ -466,14 +485,17 @@ export default function GymApp() {
           <h1 className="text-4xl font-bold text-white mb-2">No Days Off Gym Club</h1>
           <p className="text-blue-200">Get 2% better every day</p>
           <p className="text-blue-300 text-sm mt-2">{session.user.email}</p>
-          
-          {(sessionData.hiitComplete || sessionData.weightsComplete || sessionData.vo2maxComplete) && (
-            <div className="mt-4 bg-yellow-500 text-yellow-900 px-4 py-3 rounded-lg font-bold">
-              Session Progress: {getSessionProgress()} complete
-              <p className="text-sm font-normal mt-1">Complete all 3 to apply improvements!</p>
-            </div>
-          )}
         </div>
+
+        {/* Add Workout Status Dashboard */}
+        <WorkoutStatus workoutData={workoutData} />
+
+        {(sessionData.hiitComplete || sessionData.weightsComplete || sessionData.vo2maxComplete) && (
+          <div className="mt-4 bg-yellow-500 text-yellow-900 px-4 py-3 rounded-lg font-bold">
+            Session Progress: {getSessionProgress()} complete
+            <p className="text-sm font-normal mt-1">Complete all 3 to apply improvements!</p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <button
@@ -521,7 +543,15 @@ export default function GymApp() {
           </button>
         </div>
 
-        <div className="flex gap-2 mt-8">
+        <button
+          onClick={() => setShowIntro(true)}
+          className="w-full bg-blue-600 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition mb-2"
+        >
+          <Trophy className="w-5 h-5" />
+          How It Works
+        </button>
+
+        <div className="flex gap-2 mt-2">
           <button
             onClick={resetAllData}
             className="flex-1 bg-gray-700 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition"
@@ -529,7 +559,7 @@ export default function GymApp() {
             <RotateCcw className="w-5 h-5" />
             Reset Data
           </button>
-          
+
           <button
             onClick={handleSignOut}
             className="flex-1 bg-red-600 bg-opacity-50 text-white p-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-opacity-70 transition"
