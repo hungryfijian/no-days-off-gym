@@ -134,26 +134,40 @@ export default function GymApp() {
   };
 
   const saveWorkoutData = async (data) => {
+    console.log('💾 saveWorkoutData STARTED');
+    console.log('Data to save:', data);
+    console.log('Session user ID:', session?.user?.id);
+
     try {
-      const { error } = await supabase
+      const dataToUpsert = {
+        user_id: session.user.id,
+        hiit_time: data.hiit.time,
+        vo2max_speed: data.vo2max.speed,
+        weights_day1: data.weights.day1,
+        weights_day2: data.weights.day2,
+        weights_day3: data.weights.day3,
+        weights_day4: data.weights.day4,
+        last_workout: data.lastWorkout,
+        consecutive_days: data.consecutiveDays,
+        recommended_rest_until: data.recommendedRestUntil,
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('📝 Upserting to Supabase:', dataToUpsert);
+
+      const { data: result, error } = await supabase
         .from('workout_data')
-        .upsert({
-          user_id: session.user.id,
-          hiit_time: data.hiit.time,
-          vo2max_speed: data.vo2max.speed,
-          weights_day1: data.weights.day1,
-          weights_day2: data.weights.day2,
-          weights_day3: data.weights.day3,
-          weights_day4: data.weights.day4,
-          last_workout: data.lastWorkout,
-          consecutive_days: data.consecutiveDays,
-          recommended_rest_until: data.recommendedRestUntil,
-          updated_at: new Date().toISOString()
-        });
+        .upsert(dataToUpsert)
+        .select();
+
+      console.log('📊 Upsert result:', result);
+      console.log('❓ Upsert error:', error);
 
       if (error) throw error;
+      console.log('✅ saveWorkoutData SUCCESS');
     } catch (error) {
-      console.error('Error saving workout data:', error);
+      console.error('❌ Error saving workout data:', error);
+      console.error('Error details:', error.message, error.details, error.hint);
     }
   };
 
@@ -367,8 +381,16 @@ export default function GymApp() {
   };
 
   const completeSession = async (updatedSessionData) => {
+    console.log('🎯 completeSession STARTED');
+    console.log('Current workoutData:', workoutData);
+    console.log('Session data:', updatedSessionData);
+
     const daysSince = getDaysSinceLastWorkout(workoutData.lastWorkout);
-    const newConsecutiveDays = daysSince === 1 ? workoutData.consecutiveDays + 1 : 0;
+    console.log('Days since last workout:', daysSince);
+
+    // Calculate new consecutive days: if first workout, set to 0; if consecutive day, increment; otherwise reset to 0
+    const newConsecutiveDays = daysSince === null ? 0 : (daysSince === 1 ? workoutData.consecutiveDays + 1 : 0);
+    console.log('New consecutive days:', newConsecutiveDays);
 
     // Only apply adjustments to passed sections
     const newHiitTime = updatedSessionData.hiitPassed
@@ -407,6 +429,9 @@ export default function GymApp() {
       setRestRecommendationDismissed(false);
     }
 
+    const lastWorkoutTimestamp = new Date().toISOString();
+    console.log('Setting lastWorkout to:', lastWorkoutTimestamp);
+
     const newWorkoutData = {
       ...workoutData,
       hiit: { time: newHiitTime },
@@ -415,13 +440,18 @@ export default function GymApp() {
         ...workoutData.weights,
         [dayKey]: updatedDayWeights
       },
-      lastWorkout: new Date().toISOString(),
+      lastWorkout: lastWorkoutTimestamp,
       consecutiveDays: newConsecutiveDays,
       recommendedRestUntil
     };
 
+    console.log('📦 New workout data to save:', newWorkoutData);
+
     setWorkoutData(newWorkoutData);
+
+    console.log('💾 About to call saveWorkoutData...');
     await saveWorkoutData(newWorkoutData);
+    console.log('✅ saveWorkoutData completed');
 
     setSessionData({
       hiitComplete: false,
@@ -435,6 +465,7 @@ export default function GymApp() {
 
     alert('🎉 Full session complete! All improvements applied!');
     setScreen('home');
+    console.log('🎯 completeSession FINISHED');
   };
 
   const handleHiitComplete = (passed) => {

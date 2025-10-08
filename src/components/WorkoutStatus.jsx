@@ -34,8 +34,8 @@ export default function WorkoutStatus({ workoutData }) {
         textColor: "text-green-700",
         bgColor: "bg-green-50",
         borderColor: "border-green-200",
-        today: "Great work! Come back tomorrow for your +2% boost",
-        tomorrow: "Train tomorrow to maintain your streak and get +2% on everything"
+        today: "Great work! Come back tomorrow for your +1% boost",
+        tomorrow: "Train tomorrow to maintain your streak and get +1% on everything"
       };
     }
 
@@ -47,7 +47,7 @@ export default function WorkoutStatus({ workoutData }) {
         textColor: "text-green-700",
         bgColor: "bg-green-50",
         borderColor: "border-green-200",
-        today: "Train today to get +2% on all your numbers",
+        today: "Train today to get +1% on all your numbers",
         tomorrow: "Miss today and it becomes a rest day (no change)"
       };
     }
