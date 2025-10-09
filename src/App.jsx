@@ -87,12 +87,13 @@ export default function GymApp() {
         .from('workout_data')
         .select('*')
         .eq('user_id', session.user.id)
-        .single();
+        .maybeSingle();
 
       console.log('✅ Query completed:', { data, error });
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('❌ Error code:', error.code);
+        console.error('❌ Error message:', error.message);
         throw error;
       }
 
@@ -388,9 +389,10 @@ export default function GymApp() {
     const daysSince = getDaysSinceLastWorkout(workoutData.lastWorkout);
     console.log('Days since last workout:', daysSince);
 
-    // Calculate new consecutive days: if first workout, set to 0; if consecutive day, increment; otherwise reset to 0
-    const newConsecutiveDays = daysSince === null ? 0 : (daysSince === 1 ? workoutData.consecutiveDays + 1 : 0);
+    // Calculate new consecutive days: if consecutive day (1 day since last), increment; otherwise set to 1
+    const newConsecutiveDays = daysSince === 1 ? workoutData.consecutiveDays + 1 : 1;
     console.log('New consecutive days:', newConsecutiveDays);
+    console.log('Logic: daysSince === 1?', daysSince === 1, '-> If true, increment; else set to 1');
 
     // Only apply adjustments to passed sections
     const newHiitTime = updatedSessionData.hiitPassed
