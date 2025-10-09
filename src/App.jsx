@@ -87,7 +87,8 @@ export default function GymApp() {
         .from('workout_data')
         .select('*')
         .eq('user_id', session.user.id)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
       console.log('✅ Query completed:', { data, error });
 
@@ -97,31 +98,40 @@ export default function GymApp() {
         throw error;
       }
 
-      if (data) {
+      // Handle array result - take most recent (first) row
+      const workoutRecord = data && data.length > 0 ? data[0] : null;
+
+      if (data && data.length > 1) {
+        console.warn('⚠️ WARNING: Multiple rows found for user! Using most recent. Row count:', data.length);
+        console.warn('All rows:', data);
+      }
+
+      if (workoutRecord) {
         console.log('💾 Data found, loading...');
+        console.log('Using workout record:', workoutRecord);
         // Show intro only for brand new users with default data
-        const isFirstTime = !data.last_workout &&
-                             data.consecutive_days === 0 &&
-                             data.hiit_time === 30 &&
-                             parseFloat(data.vo2max_speed) === 10.0 &&
-                             Object.keys(data.weights_day1 || {}).length === 0;
+        const isFirstTime = !workoutRecord.last_workout &&
+                             workoutRecord.consecutive_days === 0 &&
+                             workoutRecord.hiit_time === 30 &&
+                             parseFloat(workoutRecord.vo2max_speed) === 10.0 &&
+                             Object.keys(workoutRecord.weights_day1 || {}).length === 0;
         setShowIntro(isFirstTime);
 
         setWorkoutData({
-          hiit: { time: data.hiit_time },
+          hiit: { time: workoutRecord.hiit_time },
           weights: {
-            day1: data.weights_day1 || {},
-            day2: data.weights_day2 || {},
-            day3: data.weights_day3 || {},
-            day4: data.weights_day4 || {}
+            day1: workoutRecord.weights_day1 || {},
+            day2: workoutRecord.weights_day2 || {},
+            day3: workoutRecord.weights_day3 || {},
+            day4: workoutRecord.weights_day4 || {}
           },
-          vo2max: { speed: parseFloat(data.vo2max_speed) },
-          lastWorkout: data.last_workout,
-          consecutiveDays: data.consecutive_days,
-          recommendedRestUntil: data.recommended_rest_until || null
+          vo2max: { speed: parseFloat(workoutRecord.vo2max_speed) },
+          lastWorkout: workoutRecord.last_workout,
+          consecutiveDays: workoutRecord.consecutive_days,
+          recommendedRestUntil: workoutRecord.recommended_rest_until || null
         });
-        setTempTime(data.hiit_time.toString());
-        setTempSpeed(data.vo2max_speed.toString());
+        setTempTime(workoutRecord.hiit_time.toString());
+        setTempSpeed(workoutRecord.vo2max_speed.toString());
       } else {
         console.log('⚠️ No data found for user');
       }
@@ -154,11 +164,11 @@ export default function GymApp() {
         updated_at: new Date().toISOString()
       };
 
-      console.log('📝 Upserting to Supabase:', dataToUpsert);
+      console.log('📝 Upserting to Supabase with onConflict: user_id');
 
       const { data: result, error } = await supabase
         .from('workout_data')
-        .upsert(dataToUpsert)
+        .upsert(dataToUpsert, { onConflict: 'user_id' })
         .select();
 
       console.log('📊 Upsert result:', result);
