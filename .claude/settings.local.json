@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Paul/AppData/Roaming/Claude/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -150,7 +150,7 @@ export default function GymApp() {
     console.log('Session user ID:', session?.user?.id);
 
     try {
-      const dataToUpsert = {
+      const dataToSave = {
         user_id: session.user.id,
         hiit_time: data.hiit.time,
         vo2max_speed: data.vo2max.speed,
@@ -164,21 +164,50 @@ export default function GymApp() {
         updated_at: new Date().toISOString()
       };
 
-      console.log('📝 Upserting to Supabase with onConflict: user_id');
+      console.log('📝 Checking for existing record...');
 
-      const { data: result, error } = await supabase
+      // Check if record exists for this user
+      const { data: existing, error: selectError } = await supabase
         .from('workout_data')
-        .upsert(dataToUpsert, { onConflict: 'user_id' })
-        .select();
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
 
-      console.log('📊 Upsert result:', result);
-      console.log('❓ Upsert error:', error);
+      if (selectError) {
+        console.error('❌ Error checking existing record:', selectError);
+        throw selectError;
+      }
+
+      let result, error;
+
+      if (existing) {
+        // UPDATE existing record
+        console.log('📝 Updating existing record with id:', existing.id);
+        ({ data: result, error } = await supabase
+          .from('workout_data')
+          .update(dataToSave)
+          .eq('user_id', session.user.id)
+          .select());
+      } else {
+        // INSERT new record
+        console.log('📝 Inserting new record...');
+        ({ data: result, error } = await supabase
+          .from('workout_data')
+          .insert(dataToSave)
+          .select());
+      }
+
+      console.log('📊 Save result:', result);
+      console.log('❓ Save error:', error);
 
       if (error) throw error;
-      console.log('✅ saveWorkoutData SUCCESS');
+
+      console.log('✅ saveWorkoutData SUCCESS - Record', existing ? 'UPDATED' : 'INSERTED');
+      console.log('📊 Saved data verification:', result);
     } catch (error) {
       console.error('❌ Error saving workout data:', error);
       console.error('Error details:', error.message, error.details, error.hint);
+      alert('Failed to save workout data. Please check console for details.');
     }
   };
 
